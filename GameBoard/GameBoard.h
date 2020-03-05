@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics/RectangleShape.hpp>
+#include <SFML/Graphics/CircleShape.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/Event.hpp>
 #include "ShipSelector.h"
@@ -23,5 +24,10 @@ public:
     std::vector<Cell*> m_focusedCells;
 
 private:
+    void TryToAddShipToBoard(Ship* ship);
+    void FindFocusedCells(const std::vector<sf::Vector2i>& positions);
+    std::vector<sf::Vector2i> GetPositions(const sf::RenderWindow& window, Ship* ship) const;
     ShipSelector m_shipSelector;
+
+    std::vector<Ship> m_ships;
 };

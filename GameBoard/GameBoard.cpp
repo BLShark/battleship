@@ -5,6 +5,7 @@
 namespace
 {
     const sf::Color CellColor(49, 187, 191);
+    const sf::Color OccupiedColor(47,151,239);
     const int board_size = 10;
     const int m_size = 50;
     const int m_thickness = 2;
@@ -31,7 +32,7 @@ void GameBoard::Init()
         pos.y += m_size + m_thickness;
     }
 
-    m_shipSelector.Init({2, 3, 3, 4, 5});
+    m_shipSelector.Init();
 }
 
 void GameBoard::Draw(sf::RenderWindow &window)
@@ -44,97 +45,128 @@ void GameBoard::Draw(sf::RenderWindow &window)
             cell.shape.setFillColor(cell.onFocus ? sf::Color::Yellow : CellColor);
             if(cell.occupied)
             {
-                cell.shape.setFillColor(sf::Color::Red);
+                cell.shape.setFillColor(OccupiedColor);
             }
             window.draw(cell.shape);
         }
+    }
+
+    for(auto& ship : m_ships)
+    {
+        window.draw(ship.GetSprite());
     }
 }
 
 void GameBoard::OnInputEvent(const sf::Event& event, const sf::RenderWindow& window)
 {
-
-    if(m_shipSelector.IsShipSelected())
+    m_shipSelector.OnInputEvent(event, window);
+    auto ship = m_shipSelector.GetSelectedShip();
+    if(nullptr == ship)
     {
-        static int rotation = 0;
-        static std::vector<sf::Vector2i> positions;
-        if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
-        {
-            rotation += 90;
-            if(rotation == 360)
-            {
-                rotation = 0;
-            }
-        }
+        return;
+    }
 
-        if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
-        {
-            positions.resize(m_shipSelector.GetSelectedShipSize(), sf::Vector2i());
-            positions[0] = sf::Mouse::getPosition(window);
-            for(int i = 1; i < positions.size(); i++)
-            {
-                int x = positions[i-1].x;
-                int y = positions[i-1].y;
-                if(rotation == 0 || rotation == 180)
-                {
-                    x += m_size + m_thickness;
-                }
-                else if(rotation == 90 || rotation == 270)
-                {
-                    y += m_size + m_thickness;
-                }
-                positions[i] = {x,y};
-            }
+    auto positions = GetPositions(window, ship);
+    FindFocusedCells(positions);
+    if(sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+    {
+        TryToAddShipToBoard(ship);
+    }
+}
 
-            m_focusedCells.clear();
-            for(auto& row : m_cells)
-            {
-                for(auto& cell : row)
-                {
-                    cell.onFocus = false;
-
-                    for(auto p : positions)
-                    {
-                        if(cell.shape.getGlobalBounds().contains(p.x, p.y))
-                        {
-                            cell.onFocus = true;
-                            m_focusedCells.push_back(&cell);
-                        }
-                    }
-                }
-            }
-        }
-        else if(event.type == sf::Event::MouseButtonReleased)
+void GameBoard::TryToAddShipToBoard(Ship *ship)
+{
+    bool isValid = true;
+    if(m_focusedCells.size() < ship->GetSize())
+    {
+        isValid = false;
+    }
+    else
+    {
+        for(auto cell : m_focusedCells)
         {
-            bool isValid = true;
-            if(m_focusedCells.size() < m_shipSelector.GetSelectedShipSize())
+            if(cell->occupied)
             {
                 isValid = false;
+                break;
             }
-            else
-            {
-                for(auto cell : m_focusedCells)
-                {
-                    if(cell->occupied)
-                    {
-                        isValid = false;
-                        break;
-                    }
-                }
-            }
-
-            for(auto cell : m_focusedCells)
-            {
-                cell->onFocus = false;
-                if(isValid)
-                {
-                    cell->occupied = true;
-                }
-            }
-
-            if (isValid)
-                m_shipSelector.DeactivateShip();
         }
     }
-    m_shipSelector.OnInputEvent(event, window);
+
+    for(auto cell : m_focusedCells)
+    {
+        cell->onFocus = false;
+        if(isValid)
+        {
+            cell->occupied = true;
+        }
+    }
+
+    if (isValid)
+    {
+        m_shipSelector.DeactivateShip();
+        m_ships.emplace_back(*ship);
+        auto& sprite = m_ships.back().GetSprite();
+
+        sf::FloatRect boundingBox = {INT32_MAX, INT32_MAX, 0, 0};
+        for(auto cell : m_focusedCells)
+        {
+            boundingBox.left = std::min(boundingBox.left, cell->shape.getPosition().x);
+            boundingBox.width = std::max(boundingBox.width, cell->shape.getPosition().x + cell->shape.getSize().x);
+
+            boundingBox.top = std::min(boundingBox.top, cell->shape.getPosition().y);
+            boundingBox.height = std::max(boundingBox.height, cell->shape.getPosition().y + cell->shape.getSize().y);
+        }
+        boundingBox.width -= boundingBox.left;
+        boundingBox.height -= boundingBox.top;
+
+        sprite.setPosition(boundingBox.left + (boundingBox.width / 2),
+                           boundingBox.top + (boundingBox.height / 2));
+        sprite.setRotation(ship->GetRotation());
+        sprite.setColor(sf::Color::White);
+    }
+}
+
+void GameBoard::FindFocusedCells(const std::vector<sf::Vector2i> &positions)
+{
+    m_focusedCells.clear();
+    for(auto& row : m_cells)
+    {
+        for(auto& cell : row)
+        {
+            cell.onFocus = false;
+
+            for(auto p : positions)
+            {
+                if(cell.shape.getGlobalBounds().contains(p.x, p.y))
+                {
+                    cell.onFocus = true;
+                    m_focusedCells.push_back(&cell);
+                }
+            }
+        }
+    }
+}
+
+std::vector<sf::Vector2i> GameBoard::GetPositions(const sf::RenderWindow &window, Ship *ship) const
+{
+    auto rotation = ship->GetRotation();
+    std::vector<sf::Vector2i> positions;
+    positions.resize(ship->GetSize(), sf::Vector2i());
+    positions[0] = sf::Mouse::getPosition(window);
+    for(int i = 1; i < positions.size(); i++)
+    {
+        int x = positions[i-1].x;
+        int y = positions[i-1].y;
+        if(rotation == 0 || rotation == 180)
+        {
+            y += m_size + m_thickness;
+        }
+        else if(rotation == 90 || rotation == 270)
+        {
+            x += m_size + m_thickness;
+        }
+        positions[i] = {x,y};
+    }
+    return positions;
 }

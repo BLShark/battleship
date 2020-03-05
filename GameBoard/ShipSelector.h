@@ -8,20 +8,14 @@
 class ShipSelector
 {
 public:
-    void Init(const std::vector<int>& shipSizes);
+    void Init();
     void Draw(sf::RenderWindow& window);
     void OnInputEvent(const sf::Event &event, const sf::RenderWindow& window);
-    bool IsShipSelected();
-    uint8_t GetSelectedShipSize();
     void DeactivateShip();
+
+    Ship* GetSelectedShip();
 private:
-//    struct Ship
-//    {
-//        sf::RectangleShape shape;
-//        sf::Text name;
-//        ShipStatus status = ShipStatus::IDLE;
-//        std::vector<sf::Vector2i> positions;
-//    };
     std::vector<Ship> m_allShips;
     Ship* m_selectedShip = nullptr;
+    float m_rotation = 0;
 };
